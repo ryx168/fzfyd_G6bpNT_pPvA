@@ -39,7 +39,7 @@ r2put() {  # r2put <file> <key>
 r2put /tmp/db.sql.gz db-latest.sql.gz
 r2put /tmp/db.sql.gz "history/${STAMP}-db.sql.gz"
 
-tar czf /tmp/wp-content.tar.gz -C "$WORK" \ --exclude=wp-content/uploads
+tar czf /tmp/wp-content.tar.gz --exclude=wp-content/uploads -C "$WORK" \
   --exclude='wp-content/cache' --exclude='wp-content/upgrade' \
   --exclude='wp-content/upgrade-temp-backup' wp-content
 r2put /tmp/wp-content.tar.gz wp-content.tar.gz
