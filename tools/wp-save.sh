@@ -101,11 +101,7 @@ wget --mirror --page-requisites --adjust-extension --convert-links \
 # the reference check is told the same so it neither flags nor "recovers" it.
 EXTERNAL="--external-prefix=/wp-content/uploads/"
 
-# Things the crawl still picks up that must not ship: ?p= shortlink duplicates,
-# the author archive (exposes the admin username), and cursor files wget renamed.
-find "$OUT" -maxdepth 1 -type f \( -name 'index.html?p=*' -o -name 'index.html%3Fp=*' -o -name 'index.html@p=*' \) -delete 2>/dev/null || true
-rm -rf "$OUT/author"
-find "$OUT" -type f -name '*.cur.html' -delete 2>/dev/null || true
+
 
 # Pages linked only as https://<apex>/... are a different host to wget, so the
 # first pass silently misses them (trupack.ca links its contact page that way).
@@ -132,6 +128,26 @@ for round in 1 2; do
   echo "    round ${round}: recovered ${added} page(s)"
   [ "$added" -eq 0 ] && break
 done
+
+# Pages nothing links to but that are live and may be bookmarked or indexed.
+for path in /shop/; do
+  if [ ! -f "$OUT${path}index.html" ]; then
+    wget --page-requisites --adjust-extension --convert-links --no-verbose --execute robots=off --tries=2 --timeout=25          --reject-regex '(/wp-content/uploads/|\?)' --directory-prefix "$OUT" --no-host-directories          "http://${SITE_HOST}:8080${path}" >/dev/null 2>&1 || true
+    [ -f "$OUT${path}index.html" ] && echo "  fetched orphaned page ${path}" || echo "  WARNING: orphaned page ${path} not fetched"
+  fi
+done
+
+# Runs AFTER recovery: the recovery crawls re-create the cursor artefact otherwise.
+# Things the crawl still picks up that must not ship: ?p= shortlink duplicates,
+# the author archive (exposes the admin username), and cursor files wget renamed.
+find "$OUT" -maxdepth 1 -type f \( -name 'index.html?p=*' -o -name 'index.html%3Fp=*' -o -name 'index.html@p=*' \) -delete 2>/dev/null || true
+rm -rf "$OUT/author"
+find "$OUT" -type f -name '*.cur.html' -delete 2>/dev/null || true
+
+# Contact Form 7 posts over AJAX to /wp-json, which does not exist here - left alone
+# the form looks fine and swallows every enquiry. Rewritten here, inside the export,
+# so a dry run proves it rather than a live publish discovering it.
+python3 "$(dirname "$0")/rewrite-form.py" "$OUT/contact/index.html" || { echo "REFUSING to publish: the contact form could not be rewritten"; exit 1; }
 
 pages=$(find "$OUT" -name '*.html' | wc -l)
 echo "  exported ${pages} html pages, $(find "$OUT" -type f | wc -l) files total"
@@ -268,7 +284,6 @@ echo "::group::Publish"
 # with the site: Pages has no Worker in front of it.
 if [ -f public/_worker.js ]; then
   cp public/_worker.js "$OUT/_worker.js"
-  python3 "$(dirname "$0")/rewrite-form.py" "$OUT/contact/index.html" || { echo "REFUSING to publish: the contact form could not be rewritten"; exit 1; }
   echo "  included _worker.js ($(stat -c%s "$OUT/_worker.js") bytes)"
 else
   echo "  WARNING: public/_worker.js missing - the admin proxy will not be deployed"
