@@ -209,7 +209,13 @@ export default {
       if (obj) {
         const h = new Headers();
         obj.writeHttpMetadata(h);
-        if (!h.get("content-type")) h.set("content-type", mediaType(path));
+        // Trust the extension over a weak stored type: minified CSS uploaded as
+        // text/plain is refused by browsers under nosniff, and this site ships that.
+        const stored = (h.get("content-type") || "").split(";")[0].trim();
+        const byExt = mediaType(path);
+        if (!stored || stored === "text/plain" || stored === "application/octet-stream" || (byExt !== "application/octet-stream" && stored !== byExt && /\.(css|js|svg|webp|woff2?)$/i.test(path))) {
+          h.set("content-type", byExt);
+        }
         h.set("etag", obj.httpEtag);
         h.set("cache-control", "public, max-age=86400");
         return new Response(obj.body, { headers: h });
@@ -243,6 +249,17 @@ export default {
         if (!(await sessionRunning(env))) await startSession(env);
       }
       return page("Starting the editor", WAITING);
+    }
+
+    // Public assets under /wp-includes/ and /wp-content/ belong to the export.
+    // Only when the export has nothing (the HTML fallback comes back) does the
+    // request fall through to the editor proxy - otherwise product pages lose
+    // their JS whenever no session is running.
+    if (/^\/wp-(includes|content)\//i.test(path) && (request.method === "GET" || request.method === "HEAD")) {
+      const a = await env.ASSETS.fetch(request);
+      const ct = (a.headers.get("content-type") || "").toLowerCase();
+      if (a.status === 200 && !ct.startsWith("text/html")) return a;
+      if (!/^\/wp-includes\//i.test(path)) return a;
     }
 
     if (ADMIN.test(path)) {
