@@ -63,7 +63,12 @@ if (!empty(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_P
 // Worker cannot preserve the original Host header. WordPress builds login
 // redirects from HTTP_HOST, so without this a signed-in editor is bounced to
 // the tunnel hostname - a second front door nobody should be using.
-\$_SERVER['HTTP_HOST'] = '${SITE_HOST}';
+// Only when the request really came through the tunnel: the export crawl talks
+// to this server as ${SITE_HOST}:8080, and rewriting THAT strips the port,
+// mismatches WP_HOME and redirects forever.
+if (!empty(\$_SERVER['HTTP_HOST']) && \$_SERVER['HTTP_HOST'] === '${EDIT_HOST}') {
+    \$_SERVER['HTTP_HOST'] = '${SITE_HOST}';
+}
 define('WP_HOME','https://${SITE_HOST}');
 define('WP_SITEURL','https://${SITE_HOST}');
 
