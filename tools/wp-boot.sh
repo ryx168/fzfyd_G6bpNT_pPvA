@@ -68,6 +68,10 @@ define('WP_HOME','https://${SITE_HOST}');
 define('WP_SITEURL','https://${SITE_HOST}');
 
 // A runner is disposable: never let the editor write code into it.
+// WP-Cron on a runner is pure waste, and worse: every spawned wp-cron.php request
+// goes out to the live host, is proxied straight back in, and counts as activity -
+// WooCommerce fires it every minute, so the session would never idle out.
+define('DISABLE_WP_CRON', true);
 define('DISALLOW_FILE_EDIT', true);
 define('DISALLOW_FILE_MODS', true);
 define('AUTOMATIC_UPDATER_DISABLED', true);
