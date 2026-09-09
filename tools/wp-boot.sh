@@ -59,6 +59,11 @@ define('DB_CHARSET','utf8mb4');
 if (!empty(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
     \$_SERVER['HTTPS'] = 'on';
 }
+// Requests arrive through the tunnel with the tunnel's own hostname, and a
+// Worker cannot preserve the original Host header. WordPress builds login
+// redirects from HTTP_HOST, so without this a signed-in editor is bounced to
+// the tunnel hostname - a second front door nobody should be using.
+\$_SERVER['HTTP_HOST'] = '${SITE_HOST}';
 define('WP_HOME','https://${SITE_HOST}');
 define('WP_SITEURL','https://${SITE_HOST}');
 
