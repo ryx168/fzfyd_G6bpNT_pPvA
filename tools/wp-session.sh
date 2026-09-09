@@ -20,7 +20,12 @@ echo "session open; idle stop after ${IDLE_MIN} min"
 
 # Activity is measured from the PHP access log: an open wp-admin tab
 # heartbeats roughly once a minute, so a real session stays alive on its own.
-last_size=$(stat -c%s /tmp/php.log 2>/dev/null || echo 0)
+# Activity means a PERSON in the admin: anything under /wp-admin/ (the open
+# editor's heartbeat included) or a login POST. Not the size of the log - that
+# counts scanners probing /wp-json and WordPress cron, and a session kept alive
+# by those never ends.
+admin_hits() { grep -cE '\]: ((GET|POST|HEAD) /wp-admin/|POST /wp-login\.php)' /tmp/php.log 2>/dev/null || true; }
+last_hits=$(admin_hits)
 idle_secs=0
 elapsed=0
 autosave_every=300      # 5 minutes - a runner can die with no usable hook,
@@ -32,10 +37,10 @@ while true; do
   elapsed=$((elapsed + 30))
   since_save=$((since_save + 30))
 
-  size=$(stat -c%s /tmp/php.log 2>/dev/null || echo 0)
-  if [ "$size" -ne "$last_size" ]; then
+  hits=$(admin_hits)
+  if [ "${hits:-0}" -ne "${last_hits:-0}" ]; then
     idle_secs=0
-    last_size=$size
+    last_hits=$hits
   else
     idle_secs=$((idle_secs + 30))
   fi
