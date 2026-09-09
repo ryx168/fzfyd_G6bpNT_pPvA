@@ -30,7 +30,15 @@ echo "  wp_posts present in dump: yes"
 # Media goes to its own bucket with a real content type, because the Function
 # hands R2's stored metadata straight to the browser.
 r2put_media() {  # r2put_media <file> <key>
-  local ct; ct=$(file --mime-type -b "$1" 2>/dev/null || echo application/octet-stream)
+  # Extension first: `file` calls minified CSS "text/plain", and browsers refuse
+  # a stylesheet served as text/plain under nosniff.
+  local ct
+  case "${1##*.}" in
+    css) ct=text/css;; js) ct=application/javascript;; svg) ct=image/svg+xml;; webp) ct=image/webp;;
+    png) ct=image/png;; jpg|jpeg) ct=image/jpeg;; gif) ct=image/gif;; mp4) ct=video/mp4;; webm) ct=video/webm;;
+    pdf) ct=application/pdf;; woff) ct=font/woff;; woff2) ct=font/woff2;; json) ct=application/json;;
+    *) ct=$(file --mime-type -b "$1" 2>/dev/null || echo application/octet-stream);;
+  esac
   curl -sSf -m 900 -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $ct"        --data-binary @"$1"        "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/$MEDIA_BUCKET/objects/$2" -o /dev/null
 }
 r2put() {  # r2put <file> <key>
@@ -274,7 +282,7 @@ if [ -n "${MEDIA_BUCKET:-}" ] && [ -d "$WORK/wp-content/uploads" ]; then
   n=0
   while IFS= read -r -d '' f; do
     r2put_media "$f" "wp-content/uploads/${f#$WORK/wp-content/uploads/}" && n=$((n+1))
-  done < <(find "$WORK/wp-content/uploads" -type f -newer /tmp/session-start -print0 2>/dev/null)
+  done < <(find "$WORK/wp-content/uploads" -type f -newer /tmp/session-start              ! -path '*/wc-logs/*' ! -name '.htaccess' ! -name 'index.html' ! -name 'index.php' -print0 2>/dev/null)
   echo "  uploaded ${n} new media file(s) to ${MEDIA_BUCKET}"
 fi
 echo "::endgroup::"
