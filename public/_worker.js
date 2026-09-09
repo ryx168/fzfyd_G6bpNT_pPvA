@@ -222,6 +222,14 @@ export default {
       }
     }
 
+    // /webmail belongs to the mail server (Roundcube on mail.shinsennafoods.ca),
+    // not to this site - it worked on the old host and people have it bookmarked.
+    // 302, not 301: mail hosting in this estate is mid-migration, and a permanent
+    // redirect cached in browsers would be very hard to walk back.
+    if (/^\/webmail(\/|$)/i.test(path)) {
+      return Response.redirect("https://mail.shinsennafoods.ca/", 302);
+    }
+
     if (path === "/contact-send") {
       if (request.method !== "POST") return Response.redirect(`${url.origin}/contact/`, 303);
       return handleContact(request, env, url);
