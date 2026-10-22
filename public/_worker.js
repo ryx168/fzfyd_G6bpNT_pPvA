@@ -7,7 +7,7 @@
 // runner reached through a tunnel at EDIT_HOST. Admin paths are proxied there;
 // when no session is up, a page offers to start one.
 
-const ADMIN = /^\/(wp-admin|wp-login\.php|wp-signup\.php|wp-cron\.php|wp-json|wp-includes)(\/|$|\?)/i;
+const ADMIN = /^\/(wp-admin|wp-login\.php|wp-signup\.php|wp-cron\.php|wp-json)(\/|$|\?)/i;
 
 // wp-content is deliberately NOT proxied: theme and uploads are already in the
 // published site, and the public pages need them whether or not a session runs.
@@ -204,7 +204,7 @@ export default {
     // ~800 MB of video and camera originals that neither the runner nor the
     // export should ever carry. Fall back to the deployed assets so the switch
     // is safe while the one-time upload is still filling the bucket.
-    if (path.startsWith("/wp-content/uploads/") && env.MEDIA && request.method === "GET") {
+    if ((path.startsWith("/wp-content/uploads/") || path.startsWith("/wp-includes/")) && env.MEDIA && (request.method === "GET" || request.method === "HEAD")) {
       const obj = await env.MEDIA.get(decodeURIComponent(path.slice(1)));
       if (obj) {
         const h = new Headers();
@@ -264,10 +264,11 @@ export default {
     // request fall through to the editor proxy - otherwise product pages lose
     // their JS whenever no session is running.
     if (/^\/wp-(includes|content)\//i.test(path) && (request.method === "GET" || request.method === "HEAD")) {
-      const a = await env.ASSETS.fetch(request);
+      const cleanReq = new Request(new URL(url.pathname, url.origin), request);
+      const a = await env.ASSETS.fetch(cleanReq);
       const ct = (a.headers.get("content-type") || "").toLowerCase();
       if (a.status === 200 && !ct.startsWith("text/html")) return a;
-      if (!/^\/wp-includes\//i.test(path)) return a;
+      return a;
     }
 
     if (ADMIN.test(path)) {
